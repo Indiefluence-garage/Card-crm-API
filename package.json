@@ -1,0 +1,41 @@
+{
+  "name": "card-crm-api",
+  "version": "1.0.0",
+  "description": "CradCRM API repo is a Node.js backend built with TypeScript that uses OpenAI for automating creation and management of CRM entities like contacts, events, and to-dos. It uses PostgreSQL as the database for reliable, scalable data storage and efficient query handling, ensuring smooth CRM workflows.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "tsx src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Indiefluence-garage/Card-crm-API.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Indiefluence-garage/Card-crm-API/issues"
+  },
+  "homepage": "https://github.com/Indiefluence-garage/Card-crm-API#readme",
+  "devDependencies": {
+    "@types/express": "^5.0.5",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "axios": "^1.13.2",
+    "bcrypt": "^6.0.0",
+    "dotenv": "^17.2.3",
+    "drizzle-kit": "^0.31.6",
+    "drizzle-orm": "^0.44.7",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.16.3",
+    "zod": "^4.1.12"
+  }
+}
