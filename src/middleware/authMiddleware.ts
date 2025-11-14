@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { jwtService } from '../services/jwtService';
 
 export interface AuthRequest extends Request {
-  userId?: number;
+  userId?: string; // Changed from number to string (UUID)
   email?: string;
 }
 
@@ -21,7 +21,7 @@ export const authMiddleware = (
     const token = authHeader.substring(7);
     const decoded = jwtService.verifyToken(token);
 
-    req.userId = decoded.userId;
+    req.userId = decoded.userId; // Now a string UUID
     req.email = decoded.email;
 
     next();

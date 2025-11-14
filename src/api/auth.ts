@@ -13,7 +13,7 @@ const router = express.Router();
 
 // ==================== EMAIL/PASSWORD ROUTES ====================
 
-// REGISTER - Step 1: Create account
+// REGISTER - Step 1: Create account and automatically send OTP email
 router.post('/register', async (req: Request, res: Response) => {
   try {
     const validatedData = registerSchema.parse(req.body);
@@ -25,8 +25,11 @@ router.post('/register', async (req: Request, res: Response) => {
       validatedData.lastName
     );
 
+    // Email is automatically sent inside authService.register
+    // Frontend doesn't need to trigger anything else
     res.status(201).json(result);
   } catch (error: any) {
+    console.error('Registration error:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -43,6 +46,7 @@ router.post('/verify-email', async (req: Request, res: Response) => {
 
     res.json(result);
   } catch (error: any) {
+    console.error('Email verification error:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -56,6 +60,7 @@ router.post('/resend-otp', async (req: Request, res: Response) => {
 
     res.json(result);
   } catch (error: any) {
+    console.error('Resend OTP error:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -75,6 +80,7 @@ router.post('/login', async (req: Request, res: Response) => {
       ...result,
     });
   } catch (error: any) {
+    console.error('Login error:', error);
     res.status(401).json({ error: error.message });
   }
 });
@@ -184,6 +190,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
       isEmailVerified: user.isEmailVerified,
     });
   } catch (error) {
+    console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
@@ -192,6 +199,13 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.put('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { firstName, lastName, imageUrl } = req.body;
+
+    // Validate at least one field is provided
+    if (!firstName && !lastName && !imageUrl) {
+      return res.status(400).json({
+        error: 'At least one field (firstName, lastName, or imageUrl) is required'
+      });
+    }
 
     const updatedUser = await authService.updateUser(req.userId!, {
       firstName,
@@ -210,6 +224,7 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error: any) {
+    console.error('Update profile error:', error);
     res.status(500).json({ error: error.message });
   }
 });

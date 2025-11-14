@@ -7,7 +7,7 @@ import { emailService } from './emailService';
 import { emailVerificationService } from './emailVerificationService';
 
 export const authService = {
-  // Register with email/password (without verification yet)
+  // Register with email/password and AUTOMATICALLY send OTP email
   async register(
     email: string,
     password: string,
@@ -37,7 +37,7 @@ export const authService = {
           firstName,
           lastName,
           authProvider: 'email',
-          isEmailVerified: false, // Set to false initially
+          isEmailVerified: false,
         })
         .returning();
 
@@ -46,13 +46,23 @@ export const authService = {
       // Generate OTP
       const otp = await emailVerificationService.generateOTP(email);
 
-      // Send OTP email
-      await emailService.sendOTP(email, otp);
+      // AUTOMATICALLY send OTP email (no frontend trigger needed)
+      try {
+        await emailService.sendOTP(email, otp);
+        console.log(`✅ OTP email sent successfully to ${email}`);
+      } catch (emailError: any) {
+        // Log error but don't fail registration
+        console.error('❌ Failed to send OTP email:', emailError.message);
+        // Consider: Should we rollback user creation if email fails?
+        // For now, we'll allow registration to succeed but log the error
+        throw new Error('Registration successful but failed to send OTP email. Please use resend OTP.');
+      }
 
       return {
+        success: true,
         message: 'Registration successful. OTP sent to your email.',
         user: {
-          id: user.id,
+          id: user.id, // UUID string
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
@@ -60,11 +70,12 @@ export const authService = {
         },
       };
     } catch (error: any) {
+      console.error('Registration service error:', error);
       throw new Error(error.message || 'Registration failed');
     }
   },
 
-  // Verify email with OTP
+  // Verify email with OTP and send welcome email
   async verifyEmail(email: string, otp: string) {
     try {
       // Verify OTP
@@ -73,7 +84,7 @@ export const authService = {
       // Update user as verified
       const updated = await db
         .update(users)
-        .set({ isEmailVerified: true })
+        .set({ isEmailVerified: true, updatedAt: new Date() })
         .where(eq(users.email, email))
         .returning();
 
@@ -86,13 +97,20 @@ export const authService = {
       // Generate JWT token
       const token = jwtService.generateToken(user.id, user.email);
 
-      // Send welcome email
-      await emailService.sendWelcomeEmail(email, user.firstName);
+      // AUTOMATICALLY send welcome email
+      try {
+        await emailService.sendWelcomeEmail(email, user.firstName);
+        console.log(`✅ Welcome email sent to ${email}`);
+      } catch (emailError: any) {
+        console.error('❌ Failed to send welcome email:', emailError.message);
+        // Don't fail verification if welcome email fails
+      }
 
       return {
+        success: true,
         message: 'Email verified successfully',
         user: {
-          id: user.id,
+          id: user.id, // UUID string
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
@@ -101,6 +119,7 @@ export const authService = {
         token,
       };
     } catch (error: any) {
+      console.error('Email verification service error:', error);
       throw new Error(error.message || 'Email verification failed');
     }
   },
@@ -125,13 +144,21 @@ export const authService = {
       // Generate new OTP
       const otp = await emailVerificationService.generateOTP(email);
 
-      // Send OTP email
-      await emailService.sendOTP(email, otp);
+      // AUTOMATICALLY send OTP email
+      try {
+        await emailService.sendOTP(email, otp);
+        console.log(`✅ OTP resent successfully to ${email}`);
+      } catch (emailError: any) {
+        console.error('❌ Failed to resend OTP email:', emailError.message);
+        throw new Error('Failed to send OTP email. Please try again later.');
+      }
 
       return {
+        success: true,
         message: 'OTP sent to your email',
       };
     } catch (error: any) {
+      console.error('Resend OTP service error:', error);
       throw new Error(error.message || 'Failed to resend OTP');
     }
   },
@@ -175,22 +202,25 @@ export const authService = {
       const token = jwtService.generateToken(user.id, user.email);
 
       return {
+        success: true,
         user: {
-          id: user.id,
+          id: user.id, // UUID string
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
+          imageUrl: user.imageUrl,
           isEmailVerified: true,
         },
         token,
       };
     } catch (error: any) {
+      console.error('Login service error:', error);
       throw new Error(error.message || 'Login failed');
     }
   },
 
-  // Get user by ID
-  async getUserById(userId: number) {
+  // Get user by ID (UUID)
+  async getUserById(userId: string) { // Changed from number to string
     try {
       const user = await db
         .select()
@@ -203,24 +233,34 @@ export const authService = {
 
       return user[0];
     } catch (error) {
+      console.error('Get user by ID error:', error);
       throw new Error('Failed to fetch user');
     }
   },
 
   // Update user profile
-  async updateUser(userId: number, data: Partial<any>) {
+  async updateUser(userId: string, data: Partial<any>) { // Changed from number to string
     try {
+      const updateData: any = { updatedAt: new Date() };
+
+      // Only include fields that are provided
+      if (data.firstName !== undefined) updateData.firstName = data.firstName;
+      if (data.lastName !== undefined) updateData.lastName = data.lastName;
+      if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl;
+
       const updated = await db
         .update(users)
-        .set({
-          ...data,
-          updatedAt: new Date(),
-        })
+        .set(updateData)
         .where(eq(users.id, userId))
         .returning();
 
+      if (updated.length === 0) {
+        throw new Error('User not found');
+      }
+
       return updated[0];
     } catch (error) {
+      console.error('Update user error:', error);
       throw new Error('Failed to update user');
     }
   },
