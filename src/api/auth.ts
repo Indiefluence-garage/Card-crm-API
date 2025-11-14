@@ -2,13 +2,18 @@ import express, { Request, Response } from 'express';
 import { authService } from '../services/authService';
 import { googleOAuthService } from '../services/googleOAuthService';
 import { authMiddleware, AuthRequest } from '../middleware/authMiddleware';
-import { registerSchema, loginSchema } from '../utils/validators';
+import {
+  registerSchema,
+  loginSchema,
+  sendOTPSchema,
+  verifyOTPSchema,
+} from '../utils/validators';
 
 const router = express.Router();
 
 // ==================== EMAIL/PASSWORD ROUTES ====================
 
-// REGISTER
+// REGISTER - Step 1: Create account
 router.post('/register', async (req: Request, res: Response) => {
   try {
     const validatedData = registerSchema.parse(req.body);
@@ -20,10 +25,36 @@ router.post('/register', async (req: Request, res: Response) => {
       validatedData.lastName
     );
 
-    res.status(201).json({
-      message: 'User registered successfully',
-      ...result,
-    });
+    res.status(201).json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// VERIFY EMAIL - Step 2: Verify with OTP
+router.post('/verify-email', async (req: Request, res: Response) => {
+  try {
+    const validatedData = verifyOTPSchema.parse(req.body);
+
+    const result = await authService.verifyEmail(
+      validatedData.email,
+      validatedData.otp
+    );
+
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// RESEND OTP
+router.post('/resend-otp', async (req: Request, res: Response) => {
+  try {
+    const validatedData = sendOTPSchema.parse(req.body);
+
+    const result = await authService.resendOTP(validatedData.email);
+
+    res.json(result);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
@@ -75,7 +106,6 @@ router.get('/google/callback', async (req: Request, res: Response) => {
 
     const result = await googleOAuthService.handleGoogleAuth(code);
 
-    // Send HTML response with token and user data
     res.send(`
       <!DOCTYPE html>
       <html>
@@ -107,7 +137,6 @@ router.get('/google/callback', async (req: Request, res: Response) => {
         <body>
           <h1>Authentication Failed</h1>
           <p>Error: ${error.message}</p>
-          <p><a href="/">Go back</a></p>
         </body>
       </html>
     `);
@@ -152,6 +181,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
       lastName: user.lastName,
       imageUrl: user.imageUrl,
       authProvider: user.authProvider,
+      isEmailVerified: user.isEmailVerified,
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch user' });

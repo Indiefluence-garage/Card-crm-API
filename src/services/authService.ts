@@ -3,9 +3,11 @@ import { users } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { jwtService } from './jwtService';
 import { passwordService } from './passwordService';
+import { emailService } from './emailService';
+import { emailVerificationService } from './emailVerificationService';
 
 export const authService = {
-  // Register with email/password
+  // Register with email/password (without verification yet)
   async register(
     email: string,
     password: string,
@@ -26,7 +28,7 @@ export const authService = {
       // Hash password
       const hashedPassword = await passwordService.hashPassword(password);
 
-      // Create user
+      // Create user (not verified yet)
       const newUser = await db
         .insert(users)
         .values({
@@ -35,25 +37,102 @@ export const authService = {
           firstName,
           lastName,
           authProvider: 'email',
+          isEmailVerified: false, // Set to false initially
         })
         .returning();
 
       const user = newUser[0];
 
-      // Generate token
-      const token = jwtService.generateToken(user.id, user.email);
+      // Generate OTP
+      const otp = await emailVerificationService.generateOTP(email);
+
+      // Send OTP email
+      await emailService.sendOTP(email, otp);
 
       return {
+        message: 'Registration successful. OTP sent to your email.',
         user: {
           id: user.id,
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
+          isEmailVerified: false,
+        },
+      };
+    } catch (error: any) {
+      throw new Error(error.message || 'Registration failed');
+    }
+  },
+
+  // Verify email with OTP
+  async verifyEmail(email: string, otp: string) {
+    try {
+      // Verify OTP
+      await emailVerificationService.verifyOTP(email, otp);
+
+      // Update user as verified
+      const updated = await db
+        .update(users)
+        .set({ isEmailVerified: true })
+        .where(eq(users.email, email))
+        .returning();
+
+      if (updated.length === 0) {
+        throw new Error('User not found');
+      }
+
+      const user = updated[0];
+
+      // Generate JWT token
+      const token = jwtService.generateToken(user.id, user.email);
+
+      // Send welcome email
+      await emailService.sendWelcomeEmail(email, user.firstName);
+
+      return {
+        message: 'Email verified successfully',
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          isEmailVerified: true,
         },
         token,
       };
     } catch (error: any) {
-      throw new Error(error.message || 'Registration failed');
+      throw new Error(error.message || 'Email verification failed');
+    }
+  },
+
+  // Resend OTP
+  async resendOTP(email: string) {
+    try {
+      // Check if user exists
+      const user = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email));
+
+      if (user.length === 0) {
+        throw new Error('User not found');
+      }
+
+      if (user[0].isEmailVerified) {
+        throw new Error('Email is already verified');
+      }
+
+      // Generate new OTP
+      const otp = await emailVerificationService.generateOTP(email);
+
+      // Send OTP email
+      await emailService.sendOTP(email, otp);
+
+      return {
+        message: 'OTP sent to your email',
+      };
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to resend OTP');
     }
   },
 
@@ -71,6 +150,11 @@ export const authService = {
       }
 
       const user = userResult[0];
+
+      // Check if email is verified
+      if (!user.isEmailVerified) {
+        throw new Error('Please verify your email first. Check your inbox for OTP.');
+      }
 
       // Check if user has password (not Google-only account)
       if (!user.password) {
@@ -96,6 +180,7 @@ export const authService = {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
+          isEmailVerified: true,
         },
         token,
       };
